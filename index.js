@@ -129,9 +129,7 @@ export async function addChannel(pluginConfig, context) {
  * @returns {String|null} the type of release to create based on the list of commits or `null` if no release has to be done.
  */
 export async function analyzeCommits(pluginConfig, context) {
-  const { commits, logger, lastRelease } = context;
-  const releaseRules = loadReleaseRules(pluginConfig, context);
-  const config = await loadParserConfig(pluginConfig, context);
+  const { logger, lastRelease } = context;
   let releaseType = null;
   if(lastRelease && lastRelease.version) {
     logger.log("Found last release version %s. The release type return in this step is only placeholder for other steps after.", lastRelease.version);
