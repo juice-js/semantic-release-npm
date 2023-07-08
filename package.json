@@ -2,21 +2,10 @@
   "name": "@juice-js/semantic-release-npm",
   "description": "semantic-release plugin to publish a npm package with latest version from git tag and commit message",
   "version": "0.0.0-development",
-  "author": "Pierre Vanduynslager (https://twitter.com/@pvdlg_)",
-  "ava": {
-    "files": [
-      "test/**/*.test.js"
-    ],
-    "timeout": "2m",
-    "workerThreads": false
-  },
+  "author": "jack@creatorflow.io",
   "bugs": {
-    "url": "https://github.com/semantic-release/npm/issues"
+    "url": "https://github.com/juice-js/semantic-release-npm/issues"
   },
-  "contributors": [
-    "Stephan Bönnemann <stephan@boennemann.me> (http://boennemann.me)",
-    "Gregor Martynus (https://twitter.com/gr2m)"
-  ],
   "dependencies": {
     "@semantic-release/error": "^4.0.0",
     "aggregate-error": "^4.0.1",
@@ -51,7 +40,7 @@
     "lib",
     "index.js"
   ],
-  "homepage": "https://github.com/semantic-release/npm#readme",
+  "homepage": "https://github.com/juice-js/semantic-release-npm#readme",
   "keywords": [
     "npm",
     "publish",
@@ -86,7 +75,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/semantic-release/npm.git"
+    "url": "https://github.com/juice-js/semantic-release-npm.git"
   },
   "scripts": {
     "codecov": "codecov -f coverage/coverage-final.json",
