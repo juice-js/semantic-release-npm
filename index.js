@@ -61,7 +61,7 @@ export async function prepare(pluginConfig, context) {
   if (errors.length > 0) {
     throw new AggregateError(errors);
   }
-
+  
   await prepareNpm(npmrc, pluginConfig, context);
   prepared = true;
 }
