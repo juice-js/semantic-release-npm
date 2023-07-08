@@ -7,6 +7,8 @@ import verifyNpmAuth from "./lib/verify-auth.js";
 import addChannelNpm from "./lib/add-channel.js";
 import prepareNpm from "./lib/prepare.js";
 import publishNpm from "./lib/publish.js";
+import debugFactory from "debug";
+const debug = debugFactory("juice-js:semantic-release-npm");
 
 let verified;
 let prepared;
@@ -16,7 +18,7 @@ export async function verifyConditions(pluginConfig, context) {
   // If the npm publish plugin is used and has `npmPublish`, `tarballDir` or `pkgRoot` configured, validate them now in order to prevent any release if the configuration is wrong
   if (context.options.publish) {
     const publishPlugin =
-      castArray(context.options.publish).find((config) => config.path && config.path === "@semantic-release/npm") || {};
+      castArray(context.options.publish).find((config) => config.path && config.path === "@juice-js/semantic-release-npm") || {};
 
     pluginConfig.npmPublish = defaultTo(pluginConfig.npmPublish, publishPlugin.npmPublish);
     pluginConfig.tarballDir = defaultTo(pluginConfig.tarballDir, publishPlugin.tarballDir);
@@ -108,4 +110,32 @@ export async function addChannel(pluginConfig, context) {
   }
 
   return addChannelNpm(npmrc, pluginConfig, pkg, context);
+}
+
+
+
+/**
+ * Determine the type of release to create based on a list of commits.
+ *
+ * @param {Object} pluginConfig The plugin configuration.
+ * @param {String} pluginConfig.preset conventional-changelog preset ('angular', 'atom', 'codemirror', 'ember', 'eslint', 'express', 'jquery', 'jscs', 'jshint')
+ * @param {String} pluginConfig.config Requireable npm package with a custom conventional-changelog preset
+ * @param {String|Array} pluginConfig.releaseRules A `String` to load an external module or an `Array` of rules.
+ * @param {Object} pluginConfig.parserOpts Additional `conventional-changelog-parser` options that will overwrite ones loaded by `preset` or `config`.
+ * @param {Object} context The semantic-release context.
+ * @param {Array<Object>} context.commits The commits to analyze.
+ * @param {String} context.cwd The current working directory.
+ *
+ * @returns {String|null} the type of release to create based on the list of commits or `null` if no release has to be done.
+ */
+export async function analyzeCommits(pluginConfig, context) {
+  const { commits, logger, lastRelease } = context;
+  const releaseRules = loadReleaseRules(pluginConfig, context);
+  const config = await loadParserConfig(pluginConfig, context);
+  let releaseType = null;
+  if(lastRelease && lastRelease.version) {
+    logger.log("Found last release version %s. The release type return in this step is only placeholder for other steps after.", lastRelease.version);
+    releaseType = "patch";
+  }
+  return releaseType;
 }
