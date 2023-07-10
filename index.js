@@ -179,7 +179,7 @@ async function run(context, plugins) {
   }
 
   // Verify config
-  await verify(context);
+  await verify(context.options, context);
 
   options.repositoryUrl = await getGitAuthUrl({ ...context, branch: { name: ciBranch } });
   context.branches = await getBranches(options.repositoryUrl, ciBranch, context);
@@ -220,7 +220,7 @@ async function run(context, plugins) {
 
   logger.success(`Allowed to push to the Git repository`);
 
-  await verifyConditions(context);
+  await verifyConditions(context.options, context);
 
   const errors = [];
   context.releases = [];
@@ -238,9 +238,9 @@ async function run(context, plugins) {
     logger.log(`No git tag version found on branch ${context.branch.name}`);
   }
 
-  await prepare(context);
+  await prepare(context.options, context);
 
-  const releases = await publish(context);
+  const releases = await publish(context.options, context);
   context.releases.push(...releases);
 
   // await success({ ...context, releases });
