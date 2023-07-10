@@ -54,8 +54,10 @@
     "node": ">=18"
   },
   "files": [
+    "bin",
     "lib",
-    "index.js"
+    "index.js",
+    "cli.js"
   ],
   "homepage": "https://github.com/juice-js/semantic-release-npm#readme",
   "keywords": [
