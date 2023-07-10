@@ -15,6 +15,7 @@ import verify from "./lib/verify.js";
 import getGitAuthUrl from "./lib/get-git-auth-url.js";
 import getBranches from "./lib/branches/index.js";
 import getLastRelease from "./lib/get-last-release.js";
+import getLogger from "./lib/get-logger.js";
 import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyAuth } from "./lib/git.js";
 import { extractErrors, makeTag } from "./lib/utils.js";
 import { hookStd } from "hook-std";
