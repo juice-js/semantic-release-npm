@@ -212,9 +212,15 @@ async function run(context, plugins) {
   if (context.lastRelease.gitTag) {
     var channel = context.branch.channel || "null";
     var lastReleaseChannel = context.lastRelease.channel || "null";
+    
     logger.log(
       `Found git tag ${context.lastRelease.gitTag} @${lastReleaseChannel} associated with version ${context.lastRelease.version} on branch ${context.branch.name}, channel ${channel}`
     );
+    // If last release channel is null and branch channel is not null, we need to publish to the branch channel
+    if(!context.lastRelease.channel && context.branch.channel){
+      logger.log(`Use branch channel ${context.branch.channel} instead of last release channel`);
+      context.lastRelease.channel = context.branch.channel;
+    }
   } else {
     logger.log(`No git tag version found on branch ${context.branch.name}`);
   }
