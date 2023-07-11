@@ -22,6 +22,7 @@ import path from "path";
 import { hookStd } from "hook-std";
 import { createRequire } from "node:module";
 import debugFactory from "debug";
+import { COMMIT_EMAIL, COMMIT_NAME } from "./lib/definitions/constants.js";
 const debug = debugFactory("juice-js:semantic-release-npm");
 const require = createRequire(import.meta.url);
 
@@ -126,32 +127,6 @@ export async function addChannel(pluginConfig, context) {
   }
 
   return addChannelNpm(npmrc, pluginConfig, pkg, context);
-}
-
-
-
-/**
- * Determine the type of release to create based on a list of commits.
- *
- * @param {Object} pluginConfig The plugin configuration.
- * @param {String} pluginConfig.preset conventional-changelog preset ('angular', 'atom', 'codemirror', 'ember', 'eslint', 'express', 'jquery', 'jscs', 'jshint')
- * @param {String} pluginConfig.config Requireable npm package with a custom conventional-changelog preset
- * @param {String|Array} pluginConfig.releaseRules A `String` to load an external module or an `Array` of rules.
- * @param {Object} pluginConfig.parserOpts Additional `conventional-changelog-parser` options that will overwrite ones loaded by `preset` or `config`.
- * @param {Object} context The semantic-release context.
- * @param {Array<Object>} context.commits The commits to analyze.
- * @param {String} context.cwd The current working directory.
- *
- * @returns {String|null} the type of release to create based on the list of commits or `null` if no release has to be done.
- */
-export async function analyzeCommits(pluginConfig, context) {
-  const { logger, lastRelease } = context;
-  let releaseType = null;
-  if(lastRelease && lastRelease.version) {
-    logger.log("Found last release version %s. The release type return in this step is only placeholder for other steps after.", lastRelease.version);
-    releaseType = "patch";
-  }
-  return releaseType;
 }
 
 
