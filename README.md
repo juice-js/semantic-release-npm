@@ -1,14 +1,15 @@
-# @semantic-release/npm
+# @juice-js/semantic-release-npm
 
-[**semantic-release**](https://github.com/semantic-release/semantic-release) plugin to publish a [npm](https://www.npmjs.com) package.
+Use this step with [**semantic-release**](https://github.com/semantic-release/semantic-release) together to publish multiple [npm](https://www.npmjs.com) packages in the same repo (mono-repo).
 
-[![Build Status](https://github.com/semantic-release/npm/workflows/Test/badge.svg)](https://github.com/semantic-release/npm/actions?query=workflow%3ATest+branch%3Amaster) [![npm latest version](https://img.shields.io/npm/v/@semantic-release/npm/latest.svg)](https://www.npmjs.com/package/@semantic-release/npm)
-[![npm next version](https://img.shields.io/npm/v/@semantic-release/npm/next.svg)](https://www.npmjs.com/package/@semantic-release/npm)
-[![npm beta version](https://img.shields.io/npm/v/@semantic-release/npm/beta.svg)](https://www.npmjs.com/package/@semantic-release/npm)
+[![Release](https://github.com/juice-js/semantic-release-npm/actions/workflows/release.yml/badge.svg?branch=master)](https://github.com/juice-js/semantic-release-npm/actions/workflows/release.yml) [![npm latest version](https://img.shields.io/npm/v/@juice-js/semantic-release-npm/latest.svg)](https://www.npmjs.com/package/@juice-js/semantic-release-npm)
+[![npm next version](https://img.shields.io/npm/v/@juice-js/semantic-release-npm/next.svg)](https://www.npmjs.com/package/@juice-js/semantic-release-npm)
+[![npm beta version](https://img.shields.io/npm/v/@juice-js/semantic-release-npm/beta.svg)](https://www.npmjs.com/package/@juice-js/semantic-release-npm)
 
 | Step               | Description                                                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `verifyConditions` | Verify the presence of the `NPM_TOKEN` environment variable, or an `.npmrc` file, and verify the authentication method is valid. |
+| `getLastRelease` | Read last tagged release to use the same version |
 | `prepare`          | Update the `package.json` version and [create](https://docs.npmjs.com/cli/pack) the npm package tarball.                         |
 | `addChannel`       | [Add a release to a dist-tag](https://docs.npmjs.com/cli/dist-tag).                                                              |
 | `publish`          | [Publish the npm package](https://docs.npmjs.com/cli/publish) to the registry.                                                   |
@@ -16,17 +17,30 @@
 ## Install
 
 ```bash
-$ npm install @semantic-release/npm -D
+$ npm install @juice-js/semantic-release-npm -D
 ```
 
 ## Usage
 
-The plugin can be configured in the [**semantic-release** configuration file](https://github.com/semantic-release/semantic-release/blob/master/docs/usage/configuration.md#configuration):
+Add more steps to publish your next packages after run [**semantic-release**](https://github.com/semantic-release/semantic-release) for your first package in the same repo.
 
-```json
-{
-  "plugins": ["@semantic-release/commit-analyzer", "@semantic-release/release-notes-generator", "@semantic-release/npm"]
-}
+```yml
+    steps:
+      - uses: actions/checkout@v3
+      # Setup .npmrc file to publish to GitHub Packages
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+      - run: npm ci
+      - run: npm run build @juice-js/dict-builder --if-present
+      - run: npm run build @juice-js/tenants --if-present
+      - run: npm test -- --watch=false --browsers=ChromeHeadless
+      # Use semantic-release to publish dist package to npmjs
+      # After this step, new tag will be created on github repo.
+      - run: npx semantic-release --plugins=@semantic-release/commit-analyzer,@semantic-release/release-notes-generator,@semantic-release/npm --pkgRoot=./dist/juice-js/dict-builder
+      # Use github tag on the last step to change dependencies version
+      # and publish package with the same version to npmjs
+      - run: npx @juice-js/semantic-release-npm --pkgRoot=./dist/juice-js/tenants --localPackages=@juice-js/dict-builder --debug
 ```
 
 ## Configuration
@@ -80,7 +94,7 @@ Refer to the [GitHub Actions recipe for npm package provenance](https://semantic
 | ------------ | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `npmPublish` | Whether to publish the `npm` package to the registry. If `false` the `package.json` version will still be updated. | `false` if the `package.json` [private](https://docs.npmjs.com/files/package.json#private) property is `true`, `true` otherwise. |
 | `pkgRoot`    | Directory path to publish.                                                                                         | `.`                                                                                                                              |
-| `tarballDir` | Directory path in which to write the package tarball. If `false` the tarball is not be kept on the file system.    | `false`                                                                                                                          |
+| `localPackages` | Specify your referenced packages in the same repo to replace its version in package.json    | `[]`                                                                                                                          |
 
 **Note**: The `pkgRoot` directory must contain a `package.json`. The version will be updated only in the `package.json` and `npm-shrinkwrap.json` within the `pkgRoot` directory.
 
@@ -92,75 +106,7 @@ The plugin uses the [`npm` CLI](https://github.com/npm/cli) which will read the 
 
 The [`registry`](https://docs.npmjs.com/misc/registry) can be configured via the npm environment variable `NPM_CONFIG_REGISTRY` and will take precedence over the configuration in `.npmrc`.
 
-The [`registry`](https://docs.npmjs.com/misc/registry) and [`dist-tag`](https://docs.npmjs.com/cli/dist-tag) can be configured under `publishConfig` in the `package.json`:
-
-```json
-{
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "tag": "latest"
-  }
-}
-```
-
 **Notes**:
 
 - The presence of an `.npmrc` file will override any specified environment variables.
 - The presence of `registry` or `dist-tag` under `publishConfig` in the `package.json` will take precedence over the configuration in `.npmrc` and `NPM_CONFIG_REGISTRY`
-
-### Examples
-
-The `npmPublish` and `tarballDir` option can be used to skip the publishing to the `npm` registry and instead, release the package tarball with another plugin. For example with the [@semantic-release/github](https://github.com/semantic-release/github) plugin:
-
-```json
-{
-  "plugins": [
-    "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
-    [
-      "@semantic-release/npm",
-      {
-        "npmPublish": false,
-        "tarballDir": "dist"
-      }
-    ],
-    [
-      "@semantic-release/github",
-      {
-        "assets": "dist/*.tgz"
-      }
-    ]
-  ]
-}
-```
-
-When publishing from a sub-directory with the `pkgRoot` option, the `package.json` and `npm-shrinkwrap.json` updated with the new version can be moved to another directory with a `postversion`. For example with the [@semantic-release/git](https://github.com/semantic-release/git) plugin:
-
-```json
-{
-  "plugins": [
-    "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
-    [
-      "@semantic-release/npm",
-      {
-        "pkgRoot": "dist"
-      }
-    ],
-    [
-      "@semantic-release/git",
-      {
-        "assets": ["package.json", "npm-shrinkwrap.json"]
-      }
-    ]
-  ]
-}
-```
-
-```json
-{
-  "scripts": {
-    "postversion": "cp -r package.json .. && cp -r npm-shrinkwrap.json .."
-  }
-}
-```

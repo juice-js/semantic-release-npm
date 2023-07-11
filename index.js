@@ -1,4 +1,4 @@
-import { castArray, defaultTo } from "lodash-es";
+import { castArray, defaultTo, pick } from "lodash-es";
 import AggregateError from "aggregate-error";
 import { temporaryFile } from "tempy";
 import getPkg from "./lib/get-pkg.js";
@@ -7,8 +7,24 @@ import verifyNpmAuth from "./lib/verify-auth.js";
 import addChannelNpm from "./lib/add-channel.js";
 import prepareNpm from "./lib/prepare.js";
 import publishNpm from "./lib/publish.js";
+
+import envCi from "env-ci";
+import hideSensitive from "./lib/hide-sensitive.js";
+import getConfig from "./lib/get-config.js";
+import verify from "./lib/verify.js";
+import getGitAuthUrl from "./lib/get-git-auth-url.js";
+import getBranches from "./lib/branches/index.js";
+import getLastRelease from "./lib/get-last-release.js";
+import getLogger from "./lib/get-logger.js";
+import { getTagHead, isBranchUpToDate, verifyAuth } from "./lib/git.js";
+import { extractErrors } from "./lib/utils.js";
+import path from "path";
+import { hookStd } from "hook-std";
+import { createRequire } from "node:module";
 import debugFactory from "debug";
+import { COMMIT_EMAIL, COMMIT_NAME } from "./lib/definitions/constants.js";
 const debug = debugFactory("juice-js:semantic-release-npm");
+const require = createRequire(import.meta.url);
 
 let verified;
 let prepared;
@@ -61,8 +77,9 @@ export async function prepare(pluginConfig, context) {
   if (errors.length > 0) {
     throw new AggregateError(errors);
   }
-  
+
   await prepareNpm(npmrc, pluginConfig, context);
+  
   prepared = true;
 }
 
@@ -113,27 +130,175 @@ export async function addChannel(pluginConfig, context) {
 }
 
 
+/* eslint complexity: off */
+async function run(context, plugins) {
+  const { cwd, env, options, logger, envCi } = context;
+  const { isCi, branch, prBranch, isPr } = envCi;
+  const ciBranch = isPr ? prBranch : branch;
 
-/**
- * Determine the type of release to create based on a list of commits.
- *
- * @param {Object} pluginConfig The plugin configuration.
- * @param {String} pluginConfig.preset conventional-changelog preset ('angular', 'atom', 'codemirror', 'ember', 'eslint', 'express', 'jquery', 'jscs', 'jshint')
- * @param {String} pluginConfig.config Requireable npm package with a custom conventional-changelog preset
- * @param {String|Array} pluginConfig.releaseRules A `String` to load an external module or an `Array` of rules.
- * @param {Object} pluginConfig.parserOpts Additional `conventional-changelog-parser` options that will overwrite ones loaded by `preset` or `config`.
- * @param {Object} context The semantic-release context.
- * @param {Array<Object>} context.commits The commits to analyze.
- * @param {String} context.cwd The current working directory.
- *
- * @returns {String|null} the type of release to create based on the list of commits or `null` if no release has to be done.
- */
-export async function analyzeCommits(pluginConfig, context) {
-  const { logger, lastRelease } = context;
-  let releaseType = null;
-  if(lastRelease && lastRelease.version) {
-    logger.log("Found last release version %s. The release type return in this step is only placeholder for other steps after.", lastRelease.version);
-    releaseType = "patch";
+  if (!isCi && !options.dryRun && !options.noCi) {
+    logger.warn("This run was not triggered in a known CI environment, running in dry-run mode.");
+    options.dryRun = true;
+  } else {
+    // When running on CI, set the commits author and committer info and prevent the `git` CLI to prompt for username/password. See #703.
+    Object.assign(env, {
+      GIT_AUTHOR_NAME: COMMIT_NAME,
+      GIT_AUTHOR_EMAIL: COMMIT_EMAIL,
+      GIT_COMMITTER_NAME: COMMIT_NAME,
+      GIT_COMMITTER_EMAIL: COMMIT_EMAIL,
+      ...env,
+      GIT_ASKPASS: "echo",
+      GIT_TERMINAL_PROMPT: 0,
+    });
   }
-  return releaseType;
+
+  if (isCi && isPr && !options.noCi) {
+    logger.log("This run was triggered by a pull request and therefore a new version won't be published.");
+    return false;
+  }
+
+  // Verify config
+  await verify(context);
+
+  options.repositoryUrl = await getGitAuthUrl({ ...context, branch: { name: ciBranch } });
+  context.branches = await getBranches(options.repositoryUrl, ciBranch, context);
+  context.branch = context.branches.find(({ name }) => name === ciBranch);
+
+  if (!context.branch) {
+    logger.log(
+      `This test run was triggered on the branch ${ciBranch}, while semantic-release is configured to only publish from ${context.branches
+        .map(({ name }) => name)
+        .join(", ")}, therefore a new version won’t be published.`
+    );
+    return false;
+  }
+
+  logger[options.dryRun ? "warn" : "success"](
+    `Run automated release from branch ${ciBranch} on repository ${options.originalRepositoryURL}${
+      options.dryRun ? " in dry-run mode" : ""
+    }`
+  );
+
+  try {
+    try {
+      await verifyAuth(options.repositoryUrl, context.branch.name, { cwd, env });
+    } catch (error) {
+      if (!(await isBranchUpToDate(options.repositoryUrl, context.branch.name, { cwd, env }))) {
+        logger.log(
+          `The local branch ${context.branch.name} is behind the remote one, therefore a new version won't be published.`
+        );
+        return false;
+      }
+
+      throw error;
+    }
+  } catch (error) {
+    logger.error(`The command "${error.command}" failed with the error message ${error.stderr}.`);
+    throw getError("EGITNOPERMISSION", context);
+  }
+
+  logger.success(`Allowed to push to the Git repository`);
+
+  await verifyConditions(context.options, context);
+
+  const errors = [];
+  context.releases = [];
+  
+  context.lastRelease = getLastRelease(context);
+  if (context.lastRelease.gitHead) {
+    context.lastRelease.gitHead = await getTagHead(context.lastRelease.gitHead, { cwd, env });
+  }
+
+  if (context.lastRelease.gitTag) {
+    var channel = context.branch.channel || "null";
+    var lastReleaseChannel = context.lastRelease.channel || "null";
+    
+    logger.log(
+      `Found git tag ${context.lastRelease.gitTag} @${lastReleaseChannel} associated with version ${context.lastRelease.version} on branch ${context.branch.name}, channel ${channel}`
+    );
+    // If last release channel is null and branch channel is not null, we need to publish to the branch channel
+    if(!context.lastRelease.channel && context.branch.channel){
+      logger.log(`Use branch channel ${context.branch.channel} instead of last release channel`);
+      context.lastRelease.channel = context.branch.channel;
+    }
+  } else {
+    logger.log(`No git tag version found on branch ${context.branch.name}`);
+  }
+
+  await prepare(context.options, context);
+
+  const release = await publish(context.options, context);
+  if(release){
+    context.releases.push(release);
+    
+    logger.success(
+      `Published release ${context.lastRelease.version} on ${context.lastRelease.channel ? context.lastRelease.channel : "default"} channel`
+    );
+  }else{
+    logger.log(`No release published`);
+  }
+
+  // await success({ ...context, releases });
+
+  return pick(context, ["lastRelease", "commits", "releases"]);
+}
+
+export default async (cliOptions = {}, { cwd = process.cwd(), env = process.env, stdout, stderr } = {}) => {
+  const { unhook } = hookStd(
+    { silent: false, streams: [process.stdout, process.stderr, stdout, stderr].filter(Boolean) },
+    hideSensitive(env)
+  );
+  const { pkgRoot } = cliOptions;
+  let basePath = pkgRoot ? path.resolve(cwd, String(pkgRoot)) : cwd;
+  const pkg = require(`${basePath}/package.json`);
+  const context = {
+    cwd,
+    env,
+    stdout: stdout || process.stdout,
+    stderr: stderr || process.stderr,
+    envCi: envCi({ env, cwd }),
+  };
+  context.logger = getLogger(context);
+  context.logger.log(`Running ${pkg.name} version ${pkg.version}`);
+  try {
+    const { plugins, options } = await getConfig(context, cliOptions);
+    options.originalRepositoryURL = options.repositoryUrl;
+    context.options = options;
+    try {
+      const result = await run(context, plugins);
+      unhook();
+      return result;
+    } catch (error) {
+      await callFail(context, plugins, error);
+      throw error;
+    }
+  } catch (error) {
+    await logErrors(context, error);
+    unhook();
+    throw error;
+  }
+};
+
+async function logErrors({ logger, stderr }, err) {
+  const errors = extractErrors(err).sort((error) => (error.semanticRelease ? -1 : 0));
+  for (const error of errors) {
+    if (error.semanticRelease) {
+      logger.error(`${error.code} ${error.message}`);
+      if (error.details) {
+        stderr.write(await terminalOutput(error.details)); // eslint-disable-line no-await-in-loop
+      }
+    } else {
+      logger.error("An error occurred while running semantic-release: %O", error);
+    }
+  }
+}
+async function callFail(context, plugins, err) {
+  const errors = extractErrors(err).filter((err) => err.semanticRelease);
+  if (errors.length > 0) {
+    try {
+      await plugins.fail({ ...context, errors });
+    } catch (error) {
+      await logErrors(context, error);
+    }
+  }
 }

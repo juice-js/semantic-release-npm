@@ -1,0 +1,9 @@
+branches:
+  - master
+  - name: beta
+    prerelease: true
+  - name: next
+    prerelease: true
+debug: true
+ci: true
+dryRun: false
