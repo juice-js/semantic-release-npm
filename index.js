@@ -210,8 +210,10 @@ async function run(context, plugins) {
   }
 
   if (context.lastRelease.gitTag) {
+    var channel = context.branch.channel || "null";
+    var lastReleaseChannel = context.lastRelease.channel || "null";
     logger.log(
-      `Found git tag ${context.lastRelease.gitTag} associated with version ${context.lastRelease.version} on branch ${context.branch.name}`
+      `Found git tag ${context.lastRelease.gitTag} @${lastReleaseChannel} associated with version ${context.lastRelease.version} on branch ${context.branch.name}, channel ${channel}`
     );
   } else {
     logger.log(`No git tag version found on branch ${context.branch.name}`);
