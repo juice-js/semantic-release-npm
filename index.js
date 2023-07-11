@@ -19,8 +19,10 @@ import getLogger from "./lib/get-logger.js";
 import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyAuth } from "./lib/git.js";
 import { extractErrors, makeTag } from "./lib/utils.js";
 import { hookStd } from "hook-std";
+import { createRequire } from "node:module";
 import debugFactory from "debug";
 const debug = debugFactory("juice-js:semantic-release-npm");
+const require = createRequire(import.meta.url);
 
 let verified;
 let prepared;
@@ -180,7 +182,7 @@ async function run(context, plugins) {
   }
 
   // Verify config
-  await verify(context.options, context);
+  await verify(context);
 
   options.repositoryUrl = await getGitAuthUrl({ ...context, branch: { name: ciBranch } });
   context.branches = await getBranches(options.repositoryUrl, ciBranch, context);
@@ -241,16 +243,20 @@ async function run(context, plugins) {
 
   await prepare(context.options, context);
 
-  const releases = await publish(context.options, context);
-  context.releases.push(...releases);
+  const release = await publish(context.options, context);
+  if(release){
+    context.releases.push(release);
+    
+    logger.success(
+      `Published release ${context.lastRelease.version} on ${context.lastRelease.channel ? context.lastRelease.channel : "default"} channel`
+    );
+  }else{
+    logger.log(`No release published`);
+  }
 
   // await success({ ...context, releases });
 
-  logger.success(
-    `Published release ${nextRelease.version} on ${nextRelease.channel ? nextRelease.channel : "default"} channel`
-  );
-
-  return pick(context, ["lastRelease", "commits", "nextRelease", "releases"]);
+  return pick(context, ["lastRelease", "commits", "releases"]);
 }
 
 export default async (cliOptions = {}, { cwd = process.cwd(), env = process.env, stdout, stderr } = {}) => {
@@ -258,6 +264,9 @@ export default async (cliOptions = {}, { cwd = process.cwd(), env = process.env,
     { silent: false, streams: [process.stdout, process.stderr, stdout, stderr].filter(Boolean) },
     hideSensitive(env)
   );
+  const { pkgRoot } = cliOptions;
+  let basePath = pkgRoot ? path.resolve(cwd, String(pkgRoot)) : cwd;
+  const pkg = require(`${basePath}/package.json`);
   const context = {
     cwd,
     env,
