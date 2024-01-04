@@ -15,6 +15,7 @@ import verify from "./lib/verify.js";
 import getGitAuthUrl from "./lib/get-git-auth-url.js";
 import getBranches from "./lib/branches/index.js";
 import getLastRelease from "./lib/get-last-release.js";
+import getCommits from "./lib/get-commits.js";
 import getLogger from "./lib/get-logger.js";
 import { getTagHead, isBranchUpToDate, verifyAuth } from "./lib/git.js";
 import { extractErrors } from "./lib/utils.js";
@@ -200,6 +201,14 @@ async function run(context, plugins) {
   logger.success(`Allowed to push to the Git repository`);
 
   await verifyConditions(context.options, context);
+
+  context.commits = await getCommits(context);
+  const type = await plugins.analyzeCommits(context);
+  
+  if(!type){
+    logger.log("There are no relevant changes, so no new version is released.");
+    return false;
+  }
 
   const errors = [];
   context.releases = [];
