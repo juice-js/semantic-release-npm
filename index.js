@@ -209,12 +209,16 @@ async function run(context, plugins) {
 
   if (context.lastRelease.gitHead) {
     context.commits = await getCommits(context);
-
-    const type = await plugins.analyzeCommits(context);
-  
-    if(!type){
-      logger.log("There are no relevant changes, so no new version is released.");
-      return false;
+    // If there are no relevant changes since last release, continue use the last release version from the Git tag
+    if(context.commits.length > 0){
+      const type = await plugins.analyzeCommits(context);
+      
+      if(!type){
+        logger.log("No release type found in commits, so no new version is released.");
+        return false;
+      }
+    }else{
+      logger.log("There are no relevant changes since last release, continue use the last release version from the Git tag");
     }
     context.lastRelease.gitHead = await getTagHead(context.lastRelease.gitHead, { cwd, env });
   }
