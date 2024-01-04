@@ -202,14 +202,14 @@ async function run(context, plugins) {
 
   await verifyConditions(context.options, context);
 
-  context.commits = await getCommits(context);
-
   const errors = [];
   context.releases = [];
   
   context.lastRelease = getLastRelease(context);
 
   if (context.lastRelease.gitHead) {
+    context.commits = await getCommits(context);
+
     const type = await plugins.analyzeCommits(context);
   
     if(!type){
