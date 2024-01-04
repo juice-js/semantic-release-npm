@@ -203,18 +203,19 @@ async function run(context, plugins) {
   await verifyConditions(context.options, context);
 
   context.commits = await getCommits(context);
-  const type = await plugins.analyzeCommits(context);
-  
-  if(!type){
-    logger.log("There are no relevant changes, so no new version is released.");
-    return false;
-  }
 
   const errors = [];
   context.releases = [];
   
   context.lastRelease = getLastRelease(context);
+
   if (context.lastRelease.gitHead) {
+    const type = await plugins.analyzeCommits(context);
+  
+    if(!type){
+      logger.log("There are no relevant changes, so no new version is released.");
+      return false;
+    }
     context.lastRelease.gitHead = await getTagHead(context.lastRelease.gitHead, { cwd, env });
   }
 
