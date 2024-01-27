@@ -236,7 +236,7 @@ async function run(context, plugins) {
       context.lastRelease.channel = context.branch.channel;
     }
   } else {
-    logger.log(`No git tag version found on branch ${context.branch.name}`);
+    logger.log(`No git tag version found on branch ${context.branch.name}. No release published`);
     return false;
   }
 
