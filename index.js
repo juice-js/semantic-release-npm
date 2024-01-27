@@ -237,6 +237,7 @@ async function run(context, plugins) {
     }
   } else {
     logger.log(`No git tag version found on branch ${context.branch.name}`);
+    return false;
   }
 
   await prepare(context.options, context);
